@@ -1,3 +1,14 @@
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
+
+use axum::{
+    body::Body,
+    http::{
+        HeaderMap, StatusCode,
+        header::{ACCEPT_RANGES, CONTENT_TYPE},
+    },
+    response::Response,
+};
 use sqlx::PgPool;
 
 use crate::{
@@ -5,7 +16,10 @@ use crate::{
     dto::tts_audio::create_tts_audio_request::CreateTtsAudioRequest,
     infra::rabbitmq::{create_channel, setup_queue},
     messaging::tts_publisher::TtsPublisher,
-    models::{tts_audio::TtsAudio, tts_job::TtsJob},
+    models::{
+        tts_audio::{TtsAudio, TtsAudioStatus},
+        tts_job::TtsJob,
+    },
     repositories::tts_audio_repository::TtsAudioRepository,
 };
 
@@ -86,5 +100,39 @@ impl TtsAudioService {
     ) -> Result<(), ApiError> {
         self.repo.update_status(audio_id, status).await?;
         Ok(())
+    }
+
+    pub async fn stream_audio(&self, audio_id: i64) -> Result<Response, ApiError> {
+        let audio = self.repo.get_by_id(audio_id).await?;
+        if !matches!(audio.status, TtsAudioStatus::Completed) {
+            return Err(ApiError::BadRequest(
+                "Audio is not ready for streaming".into(),
+            ));
+        }
+
+        let path = audio
+            .audio_url
+            .as_ref()
+            .ok_or(ApiError::BadRequest("Audio file not ready".into()))?;
+
+        let full_path = format!("tts-service/{}", path);
+
+        let file = File::open(full_path)
+            .await
+            .map_err(|_| ApiError::NotFound("Audio file not found".into()))?;
+
+        let stream = ReaderStream::new(file);
+        let body = Body::from_stream(stream);
+
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, "audio/mpeg".parse().unwrap());
+        headers.insert(ACCEPT_RANGES, "bytes".parse().unwrap());
+
+        let response = Response::builder()
+            .status(StatusCode::OK)
+            .body(body)
+            .unwrap();
+
+        Ok(response)
     }
 }

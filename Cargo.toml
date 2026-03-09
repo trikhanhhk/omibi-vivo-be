@@ -26,4 +26,6 @@ tower = "0.4"
 lapin = "2"
 futures-lite = "2"
 
+tokio-util = { version = "0.7", features = ["io"] }
+
 dotenvy = "0.15"

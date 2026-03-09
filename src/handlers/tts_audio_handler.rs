@@ -1,4 +1,7 @@
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 
 use validator::Validate;
 
@@ -6,7 +9,7 @@ use crate::{
     app::AppState,
     common::{
         response::{ApiError, ApiResponse},
-        types::ApiResult,
+        types::{ApiResult, StreamResult},
     },
     dto::tts_audio::create_tts_audio_request::CreateTtsAudioRequest,
     models::tts_audio::TtsAudio,
@@ -14,7 +17,7 @@ use crate::{
 
 pub async fn get_tts_audio(
     State(state): State<AppState>,
-    axum::extract::Path(audio_id): axum::extract::Path<i64>,
+    Path(audio_id): Path<i64>,
 ) -> ApiResult<TtsAudio> {
     let tts_audio = state.tts_audio_service.get_tts_audio(audio_id).await?;
 
@@ -37,4 +40,12 @@ pub async fn create_tts_audio(
         tts_audio,
         "TTS audio generated successfully".to_string(),
     )))
+}
+
+pub async fn stream_audio(
+    State(state): State<AppState>,
+    Path(audio_id): Path<i64>,
+) -> StreamResult {
+    let response = state.tts_audio_service.stream_audio(audio_id).await?;
+    Ok(response)
 }
