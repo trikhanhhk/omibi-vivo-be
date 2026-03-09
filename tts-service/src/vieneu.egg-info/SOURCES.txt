@@ -1,0 +1,69 @@
+LICENSE
+README.md
+README_PYPI.md
+pyproject.toml
+apps/__init__.py
+apps/gradio_main.py
+apps/gradio_xpu.py
+apps/web_stream.py
+examples/__init__.py
+examples/main.py
+examples/main_rabbitmq.py
+examples/main_remote.py
+src/vieneu/__init__.py
+src/vieneu/base.py
+src/vieneu/core_xpu.py
+src/vieneu/factory.py
+src/vieneu/fast.py
+src/vieneu/rabbitmq_worker.py
+src/vieneu/remote.py
+src/vieneu/serve.py
+src/vieneu/standard.py
+src/vieneu/utils.py
+src/vieneu.egg-info/PKG-INFO
+src/vieneu.egg-info/SOURCES.txt
+src/vieneu.egg-info/dependency_links.txt
+src/vieneu.egg-info/entry_points.txt
+src/vieneu.egg-info/requires.txt
+src/vieneu.egg-info/top_level.txt
+src/vieneu/assets/samples/Bình (nam miền Bắc).pt
+src/vieneu/assets/samples/Bình (nam miền Bắc).txt
+src/vieneu/assets/samples/Bình (nam miền Bắc).wav
+src/vieneu/assets/samples/Ly (nữ miền Bắc).pt
+src/vieneu/assets/samples/Ly (nữ miền Bắc).txt
+src/vieneu/assets/samples/Ly (nữ miền Bắc).wav
+src/vieneu/assets/samples/Ngọc (nữ miền Bắc).pt
+src/vieneu/assets/samples/Ngọc (nữ miền Bắc).txt
+src/vieneu/assets/samples/Ngọc (nữ miền Bắc).wav
+src/vieneu/assets/samples/Tuyên (nam miền Bắc).pt
+src/vieneu/assets/samples/Tuyên (nam miền Bắc).txt
+src/vieneu/assets/samples/Tuyên (nam miền Bắc).wav
+src/vieneu/assets/samples/Vĩnh (nam miền Nam).pt
+src/vieneu/assets/samples/Vĩnh (nam miền Nam).txt
+src/vieneu/assets/samples/Vĩnh (nam miền Nam).wav
+src/vieneu/assets/samples/Đoan (nữ miền Nam).pt
+src/vieneu/assets/samples/Đoan (nữ miền Nam).txt
+src/vieneu/assets/samples/Đoan (nữ miền Nam).wav
+src/vieneu_utils/__init__.py
+src/vieneu_utils/core_utils.py
+src/vieneu_utils/normalize_text.py
+src/vieneu_utils/phonemize_text.py
+src/vieneu_utils/cleaner/__init__.py
+src/vieneu_utils/cleaner/datestime.py
+src/vieneu_utils/cleaner/num2vi.py
+src/vieneu_utils/cleaner/numerical.py
+src/vieneu_utils/cleaner/symbols.py
+src/vieneu_utils/cleaner/text_norm.py
+src/vieneu_utils/phone_dict/phone_dict.db
+tests/test_audio_utils.py
+tests/test_bilingual_phonemize.py
+tests/test_core_utils.py
+tests/test_factory.py
+tests/test_normalize.py
+tests/test_num2vi_extended.py
+tests/test_optimizations.py
+tests/test_phonemize.py
+tests/test_remote_mock.py
+tests/test_sdk_extended.py
+tests/test_tts_classes.py
+tests/test_tts_mock.py

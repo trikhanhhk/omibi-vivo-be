@@ -1,0 +1,4 @@
+[console_scripts]
+vieneu-rabbitmq = vieneu.rabbitmq_worker:main
+vieneu-stream = apps.web_stream:main
+vieneu-web = apps.gradio_main:main
