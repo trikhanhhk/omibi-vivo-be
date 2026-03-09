@@ -1,0 +1,3 @@
+ALTER TABLE tts_audios
+ADD COLUMN tts_name TEXT NOT NULL DEFAULT 'Default TTS',
+ADD COLUMN tts_model TEXT NOT NULL DEFAULT 'Default Model';
