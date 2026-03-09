@@ -1,0 +1,49 @@
+
+✅ [Số thông thường] — Passed: 10/10
+
+✅ [Số thập phân] — Passed: 4/4
+
+✅ [Số điện thoại] — Passed: 2/2
+
+✅ [Số thứ tự đặc biệt] — Passed: 4/4
+
+✅ [Phép nhân] — Passed: 2/2
+
+✅ [Ngày tháng năm (đầy đủ)] — Passed: 4/4
+
+✅ [Ngày tháng (ngắn)] — Passed: 2/2
+
+✅ [Tháng năm] — Passed: 2/2
+
+✅ [Ngày tháng không hợp lệ (phải giữ nguyên)] — Passed: 2/2
+
+✅ [Thời gian] — Passed: 7/7
+
+✅ [Tiền tệ] — Passed: 12/12
+
+✅ [Đơn vị đo lường] — Passed: 16/16
+
+✅ [Khoảng / Dãy số] — Passed: 2/2
+
+✅ [Số La Mã] — Passed: 5/5
+
+✅ [Chữ cái] — Passed: 5/5
+
+✅ [Viết tắt tiếng Việt] — Passed: 11/11
+
+✅ [Bảo vệ thẻ tiếng Anh <en>] — Passed: 5/5
+
+✅ [Dấu câu và ký tự đặc biệt] — Passed: 11/11
+
+✅ [Cấu trúc văn bản (Xuống dòng)] — Passed: 2/2
+
+✅ [Viết tắt đơn giản] — Passed: 4/4
+
+✅ [Hỗn hợp] — Passed: 3/3
+
+✅ [An toàn (Không nhầm lẫn)] — Passed: 5/5
+
+============================================================
+TOTAL: 120/120 passed
+🎉 ALL TESTS PASSED!
+============================================================
