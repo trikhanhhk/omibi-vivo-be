@@ -66,4 +66,25 @@ impl TtsAudioService {
     pub async fn get_tts_audio(&self, audio_id: i64) -> Result<TtsAudio, ApiError> {
         Ok(self.repo.get_by_id(audio_id).await?)
     }
+
+    pub async fn update_audio_url_and_status(
+        &self,
+        audio_id: i64,
+        audio_url: &str,
+        status: crate::models::tts_audio::TtsAudioStatus,
+    ) -> Result<(), ApiError> {
+        self.repo
+            .update_audio_url_and_status(audio_id, audio_url, status)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_status(
+        &self,
+        audio_id: i64,
+        status: crate::models::tts_audio::TtsAudioStatus,
+    ) -> Result<(), ApiError> {
+        self.repo.update_status(audio_id, status).await?;
+        Ok(())
+    }
 }

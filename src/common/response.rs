@@ -38,6 +38,7 @@ impl<T> ApiResponse<T> {
     }
 }
 
+#[derive(Debug)]
 pub enum ApiError {
     BadRequest(String),
     NotFound(String),

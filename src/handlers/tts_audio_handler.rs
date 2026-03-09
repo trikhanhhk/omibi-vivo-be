@@ -12,6 +12,15 @@ use crate::{
     models::tts_audio::TtsAudio,
 };
 
+pub async fn get_tts_audio(
+    State(state): State<AppState>,
+    axum::extract::Path(audio_id): axum::extract::Path<i64>,
+) -> ApiResult<TtsAudio> {
+    let tts_audio = state.tts_audio_service.get_tts_audio(audio_id).await?;
+
+    Ok(Json(ApiResponse::success(tts_audio)))
+}
+
 pub async fn create_tts_audio(
     State(state): State<AppState>,
     Json(payload): Json<CreateTtsAudioRequest>,
