@@ -12,7 +12,7 @@ use crate::{
 
 pub fn routes() -> Router<AppState> {
     Router::new().nest(
-        "/audio-merge",
+        "/api/audio-merge",
         Router::new()
             .route("/", post(merge_audio))
             .route("/jobs", get(get_merge_jobs))

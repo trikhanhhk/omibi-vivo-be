@@ -10,7 +10,7 @@ use crate::{
 
 pub fn routes() -> Router<AppState> {
     Router::new().nest(
-        "/tts-audio",
+        "/api/tts-audio",
         Router::new()
             .route("/", post(create_tts_audio))
             .route("/:audio_id", get(get_tts_audio))

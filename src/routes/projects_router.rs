@@ -5,7 +5,7 @@ use crate::{app::AppState, handlers::projects_handler};
 
 pub fn routes() -> Router<AppState> {
     Router::new().nest(
-        "/projects",
+        "/api/projects",
         Router::new()
             .route(
                 "/",
