@@ -28,23 +28,19 @@ impl ProjectService {
         CreateProjectRequest { name, description }: CreateProjectRequest,
     ) -> Result<ProjectBasic, ApiError> {
         if name.trim().is_empty() {
-            return Err(ApiError::BadRequest(
+            return Err(ApiError::bad_request(
                 "Project name cannot be empty".to_string(),
             ));
         }
 
-        Ok(self.repo.create(name.clone(), description).await?)
+        Ok(self.repo.create(name, description).await?)
     }
 
     pub async fn get_project_by_id(&self, project_id: i64) -> Result<Project, ApiError> {
-        let project = self.repo.get_by_id(project_id).await?;
-        if project.is_none() {
-            return Err(ApiError::NotFound(format!(
-                "Project with id {} not found",
-                project_id
-            )));
-        }
-        Ok(project.unwrap())
+        let project = self.repo.get_by_id(project_id).await?.ok_or_else(|| {
+            ApiError::not_found(format!("Project with id {} not found", project_id))
+        })?;
+        Ok(project)
     }
 
     pub async fn update_project_by_id(
@@ -52,18 +48,12 @@ impl ProjectService {
         project_id: i64,
         CreateProjectRequest { name, description }: CreateProjectRequest,
     ) -> Result<ProjectDetail, ApiError> {
-        let project = self.repo.get_by_id(project_id).await?;
-        if project.is_none() {
-            return Err(ApiError::NotFound(format!(
-                "Project with id {} not found",
-                project_id
-            )));
-        }
-
-        let existing_project = project.unwrap();
+        let project = self.repo.get_by_id(project_id).await?.ok_or_else(|| {
+            ApiError::not_found(format!("Project with id {} not found", project_id))
+        })?;
 
         let updated_name = if name.trim().is_empty() {
-            existing_project.name
+            project.name
         } else {
             name.clone()
         };
@@ -75,13 +65,9 @@ impl ProjectService {
     }
 
     pub async fn delete_project_by_id(&self, project_id: i64) -> Result<(), ApiError> {
-        let project = self.repo.get_by_id(project_id).await?;
-        if project.is_none() {
-            return Err(ApiError::NotFound(format!(
-                "Project with id {} not found",
-                project_id
-            )));
-        }
+        self.repo.get_by_id(project_id).await?.ok_or_else(|| {
+            ApiError::not_found(format!("Project with id {} not found", project_id))
+        })?;
         self.repo.delete_by_id(project_id).await?;
         Ok(())
     }

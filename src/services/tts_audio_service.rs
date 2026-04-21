@@ -53,7 +53,7 @@ impl TtsAudioService {
             tts_model: audio.tts_model.clone(),
         };
 
-        self.publisher.publish(&job).await;
+        let _ = self.publisher.publish(&job).await;
 
         Ok(audio)
     }
@@ -63,6 +63,10 @@ impl TtsAudioService {
         audio_id: i64,
         update_request: CreateTtsAudioRequest,
     ) -> Result<TtsAudio, ApiError> {
+        let _ =
+            self.repo.get_by_id(audio_id).await?.ok_or_else(|| {
+                ApiError::not_found(format!("Audio with id {} not found", audio_id))
+            })?;
         let audio = self.repo.update(audio_id, update_request).await?;
 
         // Publish a job to RabbitMQ for asynchronous TTS generation if text is not empty
@@ -72,13 +76,17 @@ impl TtsAudioService {
             tts_model: audio.tts_model.clone(),
         };
 
-        self.publisher.publish(&job).await;
+        let _ = self.publisher.publish(&job).await;
 
         Ok(audio)
     }
 
     pub async fn get_tts_audio(&self, audio_id: i64) -> Result<TtsAudio, ApiError> {
-        Ok(self.repo.get_by_id(audio_id).await?)
+        let audio =
+            self.repo.get_by_id(audio_id).await?.ok_or_else(|| {
+                ApiError::not_found(format!("Audio with id {} not found", audio_id))
+            })?;
+        Ok(audio)
     }
 
     pub async fn update_audio_url_and_status(
@@ -103,23 +111,24 @@ impl TtsAudioService {
     }
 
     pub async fn stream_audio(&self, audio_id: i64) -> Result<Response, ApiError> {
-        let audio = self.repo.get_by_id(audio_id).await?;
+        let audio =
+            self.repo.get_by_id(audio_id).await?.ok_or_else(|| {
+                ApiError::not_found(format!("Audio with id {} not found", audio_id))
+            })?;
         if !matches!(audio.status, TtsAudioStatus::Completed) {
-            return Err(ApiError::BadRequest(
-                "Audio is not ready for streaming".into(),
-            ));
+            return Err(ApiError::bad_request("Audio is not ready for streaming"));
         }
 
         let path = audio
             .audio_url
             .as_ref()
-            .ok_or(ApiError::BadRequest("Audio file not ready".into()))?;
+            .ok_or(ApiError::bad_request("Audio file not ready"))?;
 
         let full_path = format!("tts-service/{}", path);
 
         let file = File::open(full_path)
             .await
-            .map_err(|_| ApiError::NotFound("Audio file not found".into()))?;
+            .map_err(|_| ApiError::not_found("Audio file not found"))?;
 
         let stream = ReaderStream::new(file);
         let body = Body::from_stream(stream);

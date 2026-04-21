@@ -31,7 +31,7 @@ pub async fn create_tts_audio(
     // Validate the incoming request
     payload
         .validate()
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     // Create the TTS audio using the service layer
     let tts_audio = state.tts_audio_service.create_tts_audio(payload).await?;

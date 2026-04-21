@@ -36,7 +36,7 @@ impl TtsAudioRepository {
         Ok(tts_audio)
     }
 
-    pub async fn get_by_id(&self, audio_id: i64) -> Result<TtsAudio, sqlx::Error> {
+    pub async fn get_by_id(&self, audio_id: i64) -> Result<Option<TtsAudio>, sqlx::Error> {
         let tts_audio = sqlx::query_as!(
             TtsAudio,
             r#"
@@ -46,7 +46,7 @@ impl TtsAudioRepository {
             "#,
             audio_id
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(tts_audio)

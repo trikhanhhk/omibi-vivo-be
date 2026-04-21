@@ -1,5 +1,4 @@
 use lapin::Channel;
-use sqlx::PgPool;
 
 use crate::{
     messaging::{
@@ -10,9 +9,7 @@ use crate::{
 
 /// Spawn background consumers for tts_complete and tts_error queues.
 /// These update the database when the Python TTS service finishes processing.
-pub async fn spawn_tts_consumers(channel: Channel, pool: PgPool) {
-    let service = TtsAudioService::new(pool).await;
-
+pub async fn spawn_tts_consumers(channel: Channel, service: TtsAudioService) {
     // Consumer for completion messages
     let complete_channel = channel.clone();
     let complete_service = service.clone();

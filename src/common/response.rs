@@ -1,3 +1,5 @@
+use std::{error::Error, fmt};
+
 use axum::{
     Json,
     http::StatusCode,
@@ -38,33 +40,132 @@ impl<T> ApiResponse<T> {
     }
 }
 
+type Source = Box<dyn Error + Send + Sync>;
+
 #[derive(Debug)]
 pub enum ApiError {
-    BadRequest(String),
-    NotFound(String),
-    Internal(String),
+    BadRequest {
+        message: String,
+        source: Option<Source>,
+    },
+    NotFound {
+        message: String,
+        source: Option<Source>,
+    },
+    Internal {
+        message: String,
+        source: Option<Source>,
+    },
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
+//
+// ===== Helper methods =====
+//
+impl ApiError {
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::BadRequest {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::NotFound {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Internal {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn internal_with<E>(message: impl Into<String>, err: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self::Internal {
+            message: message.into(),
+            source: Some(Box::new(err)),
+        }
+    }
+
+    fn message(&self) -> &str {
         match self {
-            ApiError::BadRequest(msg) => {
-                (StatusCode::BAD_REQUEST, Json(ApiResponse::<()>::error(msg))).into_response()
-            }
-            ApiError::NotFound(msg) => {
-                (StatusCode::NOT_FOUND, Json(ApiResponse::<()>::error(msg))).into_response()
-            }
-            ApiError::Internal(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(msg)),
-            )
-                .into_response(),
+            ApiError::BadRequest { message, .. }
+            | ApiError::NotFound { message, .. }
+            | ApiError::Internal { message, .. } => message,
+        }
+    }
+
+    fn status_code(&self) -> StatusCode {
+        match self {
+            ApiError::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            ApiError::NotFound { .. } => StatusCode::NOT_FOUND,
+            ApiError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn source_ref(&self) -> Option<&Source> {
+        match self {
+            ApiError::BadRequest { source, .. }
+            | ApiError::NotFound { source, .. }
+            | ApiError::Internal { source, .. } => source.as_ref(),
         }
     }
 }
 
+//
+// ===== Display =====
+//
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ApiError::BadRequest { message, .. } => write!(f, "BadRequest: {}", message),
+            ApiError::NotFound { message, .. } => write!(f, "NotFound: {}", message),
+            ApiError::Internal { message, .. } => write!(f, "Internal: {}", message),
+        }
+    }
+}
+
+//
+// ===== Error trait (with chaining) =====
+//
+impl Error for ApiError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source_ref().map(|s| s.as_ref() as _)
+    }
+}
+
+//
+// ===== HTTP response mapping =====
+//
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let status = self.status_code();
+        let message = self.message().to_string();
+
+        // 👇 optional: log full error chain (rất nên dùng tracing trong thực tế)
+        if let Some(source) = self.source() {
+            eprintln!("Error: {}", message);
+            eprintln!("Caused by: {}", source);
+        }
+
+        (status, Json(ApiResponse::<()>::error(message))).into_response()
+    }
+}
+
+//
+// ===== External error mapping =====
+//
 impl From<sqlx::Error> for ApiError {
     fn from(err: sqlx::Error) -> Self {
-        ApiError::Internal(format!("Database error: {}", err))
+        ApiError::Internal {
+            message: "Database error".to_string(), // không leak chi tiết
+            source: Some(Box::new(err)),
+        }
     }
 }

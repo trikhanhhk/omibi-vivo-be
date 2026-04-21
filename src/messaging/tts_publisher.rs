@@ -13,8 +13,8 @@ impl TtsPublisher {
         Self { channel }
     }
 
-    pub async fn publish(&self, job: &TtsJob) {
-        let payload = serde_json::to_vec(job).unwrap();
+    pub async fn publish(&self, job: &TtsJob) -> Result<(), Box<dyn std::error::Error>> {
+        let payload = serde_json::to_vec(job)?;
 
         self.channel
             .basic_publish(
@@ -24,9 +24,9 @@ impl TtsPublisher {
                 &payload,
                 BasicProperties::default(),
             )
-            .await
-            .unwrap()
-            .await
-            .unwrap();
+            .await?
+            .await?;
+
+        Ok(())
     }
 }

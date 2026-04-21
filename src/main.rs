@@ -4,6 +4,7 @@ use ominihub_vivoice::{
     config::database,
     infra::rabbitmq::{create_channel, setup_queue},
     messaging::tts_consumer::spawn_tts_consumers,
+    services::tts_audio_service::TtsAudioService,
 };
 
 #[tokio::main]
@@ -19,12 +20,16 @@ async fn main() {
     // Setup RabbitMQ consumer channel and spawn background consumers
     let consumer_channel = create_channel().await;
     setup_queue(&consumer_channel).await;
-    spawn_tts_consumers(consumer_channel, pool.clone()).await;
+    let service = TtsAudioService::new(pool.clone()).await;
+    spawn_tts_consumers(consumer_channel, service).await;
 
     let app = create_app().with_state(AppState::new(pool).await);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
 
-    println!("🚀 Server running on http://0.0.0.0:8000");
+    println!("🚀 Server running on http://0.0.0.0:{}", port);
     axum::serve(listener, app).await.unwrap();
 }

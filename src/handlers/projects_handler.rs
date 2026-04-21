@@ -30,7 +30,7 @@ pub async fn create_project(
     // Validate the incoming request
     payload
         .validate()
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     // Create the project using the service layer
     let project = state.project_service.create_project(payload).await?;
@@ -66,7 +66,7 @@ pub async fn update_project_by_id(
     // Validate the incoming request
     payload
         .validate()
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     // Update the project using the service layer
     let project = state
