@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lapin::{Channel, Connection, ConnectionProperties};
+use lapin::{Channel, Connection, ConnectionProperties, options::QueueDeclareOptions};
 use tokio::time::sleep;
 
 pub const QUEUE_TTS_REQUEST: &str = "tts_queue";
@@ -40,13 +40,14 @@ pub async fn create_channel() -> Channel {
 }
 
 pub async fn setup_queue(channel: &Channel) {
+    let opts = QueueDeclareOptions {
+        durable: true, // 👈 QUAN TRỌNG
+        ..Default::default()
+    };
+
     // Declare the request queue (Rust publishes, Python consumes)
     channel
-        .queue_declare(
-            QUEUE_TTS_REQUEST,
-            lapin::options::QueueDeclareOptions::default(),
-            lapin::types::FieldTable::default(),
-        )
+        .queue_declare(QUEUE_TTS_REQUEST, opts, lapin::types::FieldTable::default())
         .await
         .unwrap();
 
@@ -54,7 +55,7 @@ pub async fn setup_queue(channel: &Channel) {
     channel
         .queue_declare(
             QUEUE_TTS_COMPLETE,
-            lapin::options::QueueDeclareOptions::default(),
+            opts,
             lapin::types::FieldTable::default(),
         )
         .await
@@ -62,11 +63,7 @@ pub async fn setup_queue(channel: &Channel) {
 
     // Declare the error queue (Python publishes, Rust consumes)
     channel
-        .queue_declare(
-            QUEUE_TTS_ERROR,
-            lapin::options::QueueDeclareOptions::default(),
-            lapin::types::FieldTable::default(),
-        )
+        .queue_declare(QUEUE_TTS_ERROR, opts, lapin::types::FieldTable::default())
         .await
         .unwrap();
 }

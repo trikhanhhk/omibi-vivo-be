@@ -25,15 +25,21 @@ impl ProjectService {
 
     pub async fn create_project(
         &self,
-        CreateProjectRequest { name, description }: CreateProjectRequest,
-    ) -> Result<ProjectBasic, ApiError> {
-        if name.trim().is_empty() {
+        req: CreateProjectRequest,
+    ) -> Result<ProjectDetail, ApiError> {
+        if req.name.trim().is_empty() {
             return Err(ApiError::bad_request(
                 "Project name cannot be empty".to_string(),
             ));
         }
 
-        Ok(self.repo.create(name, description).await?)
+        let audio_segments = req.audio_segments.unwrap_or_default();
+        let video_segments = req.video_segments.unwrap_or_default();
+
+        Ok(self
+            .repo
+            .create(req.name, req.description, audio_segments, video_segments)
+            .await?)
     }
 
     pub async fn get_project_by_id(&self, project_id: i64) -> Result<Project, ApiError> {
@@ -46,7 +52,9 @@ impl ProjectService {
     pub async fn update_project_by_id(
         &self,
         project_id: i64,
-        CreateProjectRequest { name, description }: CreateProjectRequest,
+        CreateProjectRequest {
+            name, description, ..
+        }: CreateProjectRequest,
     ) -> Result<ProjectDetail, ApiError> {
         let project = self.repo.get_by_id(project_id).await?.ok_or_else(|| {
             ApiError::not_found(format!("Project with id {} not found", project_id))

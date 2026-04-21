@@ -28,4 +28,8 @@ futures-lite = "2"
 
 tokio-util = { version = "0.7", features = ["io"] }
 
+reqwest = { version = "0.12", features = ["json", "stream"] }
+uuid = { version = "1", features = ["v4"] }
+
 dotenvy = "0.15"
+futures = "0.3.32"

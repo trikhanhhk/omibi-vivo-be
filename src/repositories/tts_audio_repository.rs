@@ -19,17 +19,14 @@ impl TtsAudioRepository {
         &self,
         create_data: CreateTtsAudioRequest,
     ) -> Result<TtsAudio, sqlx::Error> {
-        let tts_audio = sqlx::query_as!(
-            TtsAudio,
-            r#"
-            INSERT INTO tts_audios (tts_name, text, tts_model, status)
-            VALUES ($1, $2, $3, 'Processing')
-            RETURNING id, tts_name, tts_model, text, audio_url, status as "status: TtsAudioStatus", created_at, updated_at
-            "#,
-            create_data.tts_name,
-            create_data.text,
-            create_data.tts_model,
+        let tts_audio = sqlx::query_as::<_, TtsAudio>(
+            "INSERT INTO tts_audios (tts_name, text, tts_model, status)
+             VALUES ($1, $2, $3, 'Processing')
+             RETURNING id, tts_name, tts_model, text, audio_url, status, created_at, updated_at",
         )
+        .bind(&create_data.tts_name)
+        .bind(&create_data.text)
+        .bind(&create_data.tts_model)
         .fetch_one(&self.pool)
         .await?;
 
@@ -37,15 +34,12 @@ impl TtsAudioRepository {
     }
 
     pub async fn get_by_id(&self, audio_id: i64) -> Result<Option<TtsAudio>, sqlx::Error> {
-        let tts_audio = sqlx::query_as!(
-            TtsAudio,
-            r#"
-            SELECT id, tts_name, tts_model, text, audio_url, status as "status: TtsAudioStatus", created_at, updated_at
-            FROM tts_audios
-            WHERE id = $1
-            "#,
-            audio_id
+        let tts_audio = sqlx::query_as::<_, TtsAudio>(
+            "SELECT id, tts_name, tts_model, text, audio_url, status, created_at, updated_at
+             FROM tts_audios
+             WHERE id = $1",
         )
+        .bind(audio_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -57,19 +51,16 @@ impl TtsAudioRepository {
         audio_id: i64,
         update_data: CreateTtsAudioRequest,
     ) -> Result<TtsAudio, sqlx::Error> {
-        let tts_audio = sqlx::query_as!(
-            TtsAudio,
-            r#"
-            UPDATE tts_audios
-            SET tts_name = $1, text = $2, tts_model = $3, updated_at = NOW()
-            WHERE id = $4
-            RETURNING id, tts_name, tts_model, text, audio_url, status as "status: TtsAudioStatus", created_at, updated_at
-            "#,
-            update_data.tts_name,
-            update_data.text,
-            update_data.tts_model,
-            audio_id
+        let tts_audio = sqlx::query_as::<_, TtsAudio>(
+            "UPDATE tts_audios
+             SET tts_name = $1, text = $2, tts_model = $3, updated_at = NOW()
+             WHERE id = $4
+             RETURNING id, tts_name, tts_model, text, audio_url, status, created_at, updated_at",
         )
+        .bind(&update_data.tts_name)
+        .bind(&update_data.text)
+        .bind(&update_data.tts_model)
+        .bind(audio_id)
         .fetch_one(&self.pool)
         .await?;
 
@@ -81,17 +72,14 @@ impl TtsAudioRepository {
         audio_id: i64,
         status: TtsAudioStatus,
     ) -> Result<TtsAudio, sqlx::Error> {
-        let tts_audio = sqlx::query_as!(
-            TtsAudio,
-            r#"
-            UPDATE tts_audios
-            SET status = $1, updated_at = NOW()
-            WHERE id = $2
-            RETURNING id, tts_name, tts_model, text, audio_url, status as "status: TtsAudioStatus", created_at, updated_at
-            "#,
-            status as TtsAudioStatus,
-            audio_id
+        let tts_audio = sqlx::query_as::<_, TtsAudio>(
+            "UPDATE tts_audios
+             SET status = $1, updated_at = NOW()
+             WHERE id = $2
+             RETURNING id, tts_name, tts_model, text, audio_url, status, created_at, updated_at",
         )
+        .bind(status)
+        .bind(audio_id)
         .fetch_one(&self.pool)
         .await?;
 
@@ -104,18 +92,15 @@ impl TtsAudioRepository {
         audio_url: &str,
         status: TtsAudioStatus,
     ) -> Result<TtsAudio, sqlx::Error> {
-        let tts_audio = sqlx::query_as!(
-            TtsAudio,
-            r#"
-            UPDATE tts_audios
-            SET audio_url = $1, status = $2, updated_at = NOW()
-            WHERE id = $3
-            RETURNING id, tts_name, tts_model, text, audio_url, status as "status: TtsAudioStatus", created_at, updated_at
-            "#,
-            audio_url,
-            status as TtsAudioStatus,
-            audio_id
+        let tts_audio = sqlx::query_as::<_, TtsAudio>(
+            "UPDATE tts_audios
+             SET audio_url = $1, status = $2, updated_at = NOW()
+             WHERE id = $3
+             RETURNING id, tts_name, tts_model, text, audio_url, status, created_at, updated_at",
         )
+        .bind(audio_url)
+        .bind(status)
+        .bind(audio_id)
         .fetch_one(&self.pool)
         .await?;
 

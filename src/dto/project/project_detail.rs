@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+use crate::models::project_segment::ProjectSegment;
+
 #[derive(Serialize)]
 pub struct ProjectDetail {
     pub id: i64,
@@ -9,7 +11,9 @@ pub struct ProjectDetail {
     pub thumbnail_url: Option<String>,
     pub audio_url: Option<String>,
     pub video_url: Option<String>,
-    pub final_url: Option<String>, // New field for the final output URL (audio+video)
+    pub final_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub audio_segments: Vec<ProjectSegment>,
+    pub video_segments: Vec<ProjectSegment>,
 }

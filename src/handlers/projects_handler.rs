@@ -11,8 +11,8 @@ use crate::{
         types::ApiResult,
     },
     dto::project::{
-        create_project_request::CreateProjectRequest, project_basic::ProjectBasic,
-        project_detail::ProjectDetail, project_list::ProjectList,
+        create_project_request::CreateProjectRequest, project_detail::ProjectDetail,
+        project_list::ProjectList,
     },
     models::project::Project,
 };
@@ -26,7 +26,7 @@ pub async fn get_projects(State(state): State<AppState>) -> ApiResult<ProjectLis
 pub async fn create_project(
     State(state): State<AppState>,
     Json(payload): Json<CreateProjectRequest>,
-) -> ApiResult<ProjectBasic> {
+) -> ApiResult<ProjectDetail> {
     // Validate the incoming request
     payload
         .validate()

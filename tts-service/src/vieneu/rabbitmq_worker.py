@@ -38,6 +38,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Vieneu.RabbitMQ")
 
+# Maps tts_model keys (sent by Rust) to HuggingFace backbone repos
+AVAILABLE_MODELS: Dict[str, str] = {
+    "q4": "pnnbao-ump/VieNeu-TTS-0.3B-q4-gguf",
+    "q8": "pnnbao-ump/VieNeu-TTS-0.3B-q8-gguf",
+    "ngochuyen": "pnnbao-ump/VieNeu-TTS-0.3B-ngoc-huyen-gguf-Q4_0",
+}
+
 
 def load_rabbitmq_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     """Load RabbitMQ settings from config.yaml, with sensible defaults."""
@@ -48,6 +55,8 @@ def load_rabbitmq_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         "password": "guest",
         "virtual_host": "/",
         "queue": "tts_queue",
+        "queue_complete": "tts_complete",
+        "queue_error": "tts_error",
         "prefetch_count": 1,
         "durable": True,
     }
@@ -77,6 +86,7 @@ class TTSWorker:
         self.channel = None
         self.tts_engine = None
         self._running = False
+        self._current_model_key: Optional[str] = None
 
     # ------------------------------------------------------------------
     # TTS engine
@@ -91,6 +101,33 @@ class TTSWorker:
         logger.info(f"🚀 Initializing VieNeu-TTS engine (mode={self.tts_mode}) …")
         self.tts_engine = Vieneu(mode=self.tts_mode, **self.tts_kwargs)
         logger.info("✅ TTS engine ready.")
+
+    def _load_model(self, model_key: str) -> None:
+        """Load a specific model by key, reloading only when it changes."""
+        if model_key == self._current_model_key and self.tts_engine is not None:
+            return
+
+        repo_id = AVAILABLE_MODELS.get(model_key)
+        if repo_id is None:
+            logger.warning(f"Unknown tts_model '{model_key}', falling back to default init.")
+            self._init_tts()
+            return
+
+        from vieneu import Vieneu
+
+        # Close previous engine if any
+        if self.tts_engine is not None:
+            try:
+                self.tts_engine.close()
+            except Exception:
+                pass
+            self.tts_engine = None
+
+        logger.info(f"🔄 Loading model key='{model_key}' repo='{repo_id}' …")
+        kwargs = {**self.tts_kwargs, "backbone_repo": repo_id}
+        self.tts_engine = Vieneu(mode=self.tts_mode, **kwargs)
+        self._current_model_key = model_key
+        logger.info(f"✅ Model '{model_key}' ready.")
 
     def _synthesize(self, text: str, voice_name: Optional[str] = None) -> bytes:
         """
@@ -145,9 +182,13 @@ class TTSWorker:
         self.connection = pika.BlockingConnection(params)
         self.channel = self.connection.channel()
 
-        queue_name = self.rmq_config["queue"]
         durable = self.rmq_config.get("durable", True)
-        self.channel.queue_declare(queue=queue_name, durable=durable)
+        for q_key in ("queue", "queue_complete", "queue_error"):
+            q_name = self.rmq_config.get(q_key)
+            if q_name:
+                self.channel.queue_declare(queue=q_name, durable=durable)
+
+        queue_name = self.rmq_config["queue"]
         self.channel.basic_qos(prefetch_count=int(self.rmq_config.get("prefetch_count", 1)))
 
         logger.info(f"📥 Listening on queue: '{queue_name}' (durable={durable})")
@@ -155,76 +196,137 @@ class TTSWorker:
     # ------------------------------------------------------------------
     # Message handler
     # ------------------------------------------------------------------
+    def _publish_complete(self, ch, audio_id: int, audio_url: str) -> None:
+        queue_complete = self.rmq_config.get("queue_complete", "tts_complete")
+        body = json.dumps({
+            "audio_id": audio_id,
+            "audio_url": audio_url,
+            "status": "completed",
+        }).encode("utf-8")
+        ch.basic_publish(
+            exchange="",
+            routing_key=queue_complete,
+            properties=pika.BasicProperties(
+                content_type="application/json",
+                delivery_mode=2,
+            ),
+            body=body,
+        )
+        logger.info(f"   📤 Published complete → '{queue_complete}' audio_id={audio_id} url={audio_url}")
+
+    def _publish_error(self, ch, audio_id: int, error: str) -> None:
+        queue_error = self.rmq_config.get("queue_error", "tts_error")
+        body = json.dumps({
+            "audio_id": audio_id,
+            "error": error,
+            "status": "failed",
+        }).encode("utf-8")
+        ch.basic_publish(
+            exchange="",
+            routing_key=queue_error,
+            properties=pika.BasicProperties(
+                content_type="application/json",
+                delivery_mode=2,
+            ),
+            body=body,
+        )
+        logger.info(f"   📤 Published error → '{queue_error}' audio_id={audio_id}")
+
     def _on_request(self, ch, method, properties, body):
         """
         Handle an incoming TTS request.
 
-        Expected JSON body:
-        {
-            "text": "Xin chào Việt Nam",
-            "voice": "Tuyen",        // optional – preset voice name
-            "format": "wav"           // optional – currently only wav supported
-        }
+        Two modes depending on the message payload:
 
-        Replies with raw WAV bytes via the reply_to queue.
-        On error, replies with JSON: {"error": "..."}
+        1. Async mode (from tts_audio_service) — payload has ``audio_id``:
+           { "audio_id": 123, "text": "...", "tts_model": "ngochuyen" }
+           → saves WAV to output/audio_{id}.wav
+           → publishes {audio_id, audio_url, status} to tts_complete queue
+
+        2. RPC mode (from audio_merge_service) — no ``audio_id``, ``reply_to`` set:
+           { "text": "...", "tts_model": "ngochuyen" }
+           → replies with raw WAV bytes (content_type=audio/wav) to reply_to queue
+           → on error replies JSON {"error": "..."} (content_type=application/json)
         """
-        correlation_id = properties.correlation_id or ""
-        reply_to = properties.reply_to
         delivery_tag = method.delivery_tag
-
-        logger.info(f"📩 Received request [corr_id={correlation_id}]")
+        audio_id: Optional[int] = None
 
         try:
             payload: Dict[str, Any] = json.loads(body)
+            audio_id_raw = payload.get("audio_id")
             text = payload.get("text", "").strip()
-            voice_name = payload.get("voice")
+            tts_model = payload.get("tts_model")
 
             if not text:
                 raise ValueError("Missing or empty 'text' field in request.")
 
-            logger.info(
-                f"   ▶ text={text[:80]}{'…' if len(text) > 80 else ''} | voice={voice_name}"
-            )
+            # Load / switch model
+            if tts_model:
+                self._load_model(tts_model)
+            else:
+                self._init_tts()
 
             start = time.perf_counter()
-            wav_bytes = self._synthesize(text, voice_name)
+            wav_bytes = self._synthesize(text)
             elapsed = time.perf_counter() - start
 
-            logger.info(
-                f"   ✅ Synthesized {len(wav_bytes)} bytes in {elapsed:.2f}s"
-            )
-
-            # Reply with audio bytes
-            if reply_to:
-                ch.basic_publish(
-                    exchange="",
-                    routing_key=reply_to,
-                    properties=pika.BasicProperties(
-                        correlation_id=correlation_id,
-                        content_type="audio/wav",
-                        delivery_mode=2,
-                    ),
-                    body=wav_bytes,
+            if audio_id_raw is not None:
+                # ── Async mode ──────────────────────────────────────────────
+                audio_id = int(audio_id_raw)
+                logger.info(
+                    f"📩 [async] audio_id={audio_id} model={tts_model} "
+                    f"text={text[:80]}{'…' if len(text) > 80 else ''}"
                 )
-                logger.info(f"   📤 Replied to '{reply_to}'")
+                logger.info(f"   ✅ Synthesized {len(wav_bytes)} bytes in {elapsed:.2f}s")
+
+                output_dir = Path("output")
+                output_dir.mkdir(parents=True, exist_ok=True)
+                audio_path = output_dir / f"audio_{audio_id}.wav"
+                audio_path.write_bytes(wav_bytes)
+
+                self._publish_complete(ch, audio_id, str(audio_path))
+
             else:
-                logger.warning("   ⚠️ No reply_to set – result discarded.")
+                # ── RPC mode ─────────────────────────────────────────────────
+                reply_to = properties.reply_to
+                correlation_id = properties.correlation_id or ""
+                logger.info(
+                    f"📩 [rpc] corr={correlation_id} model={tts_model} "
+                    f"text={text[:80]}{'…' if len(text) > 80 else ''}"
+                )
+                logger.info(f"   ✅ Synthesized {len(wav_bytes)} bytes in {elapsed:.2f}s")
+
+                if reply_to:
+                    ch.basic_publish(
+                        exchange="",
+                        routing_key=reply_to,
+                        properties=pika.BasicProperties(
+                            correlation_id=correlation_id,
+                            content_type="audio/wav",
+                            delivery_mode=1,  # transient – reply queue is auto-delete
+                        ),
+                        body=wav_bytes,
+                    )
+                    logger.info(f"   📤 RPC reply → '{reply_to}'")
+                else:
+                    logger.warning("   ⚠️  RPC mode but no reply_to set – result discarded.")
 
         except Exception as exc:
             logger.error(f"   ❌ Error processing request: {exc}")
             traceback.print_exc()
 
-            # Send error response if possible
-            if reply_to:
+            if audio_id is not None:
+                self._publish_error(ch, audio_id, str(exc))
+            elif properties.reply_to:
+                # RPC error path
                 error_body = json.dumps({"error": str(exc)}).encode("utf-8")
                 ch.basic_publish(
                     exchange="",
-                    routing_key=reply_to,
+                    routing_key=properties.reply_to,
                     properties=pika.BasicProperties(
-                        correlation_id=correlation_id,
+                        correlation_id=properties.correlation_id or "",
                         content_type="application/json",
-                        delivery_mode=2,
+                        delivery_mode=1,
                     ),
                     body=error_body,
                 )

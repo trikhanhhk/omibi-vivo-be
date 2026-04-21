@@ -48,6 +48,9 @@ rabbitmq:
   port: 5672
   username: guest
   password: guest
+  queue: tts_queue
+  queue_complete: tts_complete
+  queue_error: tts_error
   virtual_host: /
   queue: tts_queue
   prefetch_count: 1
