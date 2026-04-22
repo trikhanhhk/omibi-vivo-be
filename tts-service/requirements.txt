@@ -63,6 +63,7 @@ lmdeploy==0.11.0
 local-attention==1.11.2
 lxml==6.0.2
 markdown-it-py==4.0.0
+minio>=7.2.0
 markupsafe==3.0.3
 mdurl==0.1.2
 mmengine-lite==0.10.7

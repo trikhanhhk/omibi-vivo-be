@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use axum::body::Body;
 use futures::{StreamExt, stream};
 use lapin::{
     BasicProperties, Channel,
@@ -19,10 +20,8 @@ use crate::{
     infra::rabbitmq::{QUEUE_TTS_REQUEST, create_channel, setup_queue},
     models::audio_merge_job::{AudioMergeJob, AudioMergeStatus},
     repositories::audio_merge_job_repository::AudioMergeJobRepository,
+    storage::minio_storage::MinioStorage,
 };
-
-/// Directory where merged audio files are persisted.
-const AUDIO_OUTPUT_DIR: &str = "output";
 
 /// Timeout waiting for the TTS worker to reply via RabbitMQ RPC.
 const TTS_RPC_TIMEOUT_SECS: u64 = 120;
@@ -31,15 +30,17 @@ const TTS_RPC_TIMEOUT_SECS: u64 = 120;
 pub struct AudioMergeService {
     channel: Channel,
     job_repo: AudioMergeJobRepository,
+    minio: MinioStorage,
 }
 
 impl AudioMergeService {
-    pub async fn new(pool: PgPool) -> Self {
+    pub async fn new(pool: PgPool, minio: MinioStorage) -> Self {
         let channel = create_channel().await;
         setup_queue(&channel).await;
         Self {
             channel,
             job_repo: AudioMergeJobRepository::new(pool),
+            minio,
         }
     }
 
@@ -96,8 +97,9 @@ impl AudioMergeService {
             .map_err(|e| ApiError::internal_with("Failed to fetch merge job", e))
     }
 
-    /// Read completed audio file bytes for download.
-    pub async fn get_audio_bytes(&self, job_id: i64) -> Result<Vec<u8>, ApiError> {
+    /// Get a streaming HTTP body for a completed merged audio file.
+    /// Data flows from MinIO directly to the caller — no full-file buffering in RAM.
+    pub async fn get_audio_stream(&self, job_id: i64) -> Result<Body, ApiError> {
         let job = self
             .get_job(job_id)
             .await?
@@ -107,13 +109,11 @@ impl AudioMergeService {
             return Err(ApiError::bad_request("Merge job is not completed yet"));
         }
 
-        let path = job
+        let key = job
             .audio_url
-            .ok_or_else(|| ApiError::internal("Completed job has no audio path"))?;
+            .ok_or_else(|| ApiError::internal("Completed job has no audio key"))?;
 
-        fs::read(&path)
-            .await
-            .map_err(|e| ApiError::internal_with("Failed to read audio file", e))
+        self.minio.download_stream(&key).await
     }
 
     /// Background worker: generate audio then update job status.
@@ -192,12 +192,8 @@ impl AudioMergeService {
         let first_start = segments[0].start_time;
         let total_duration = segments.last().unwrap().end_time - first_start;
 
-        // Persist output to a stable directory so it can be served later
-        let output_dir = PathBuf::from(AUDIO_OUTPUT_DIR);
-        fs::create_dir_all(&output_dir)
-            .await
-            .map_err(|e| ApiError::internal_with("Failed to create output directory", e))?;
-        let output_path = output_dir.join(&request.metadata.file_name);
+        // Merge into a temp output file, then upload to MinIO
+        let output_path = temp_dir.join(&request.metadata.file_name);
 
         self.run_ffmpeg_merge(
             &segment_files,
@@ -208,10 +204,13 @@ impl AudioMergeService {
         )
         .await?;
 
-        // Clean up temp segment files
+        let minio_key = format!("merged/{}", &request.metadata.file_name);
+        self.minio.upload_from_path(&minio_key, &output_path, "audio/mpeg").await?;
+
+        // Clean up temp dir (segments + merged file)
         let _ = fs::remove_dir_all(&temp_dir).await;
 
-        Ok(output_path)
+        Ok(PathBuf::from(&minio_key))
     }
 
     /// Call the TTS worker via RabbitMQ RPC and return the raw WAV bytes.

@@ -5,6 +5,7 @@ use ominihub_vivoice::{
     infra::rabbitmq::{create_channel, setup_queue},
     messaging::tts_consumer::spawn_tts_consumers,
     services::tts_audio_service::TtsAudioService,
+    storage::minio_storage::MinioStorage,
 };
 
 #[tokio::main]
@@ -17,13 +18,15 @@ async fn main() {
         .await
         .expect("Failed to connect to the database");
 
+    let minio = MinioStorage::from_env();
+
     // Setup RabbitMQ consumer channel and spawn background consumers
     let consumer_channel = create_channel().await;
     setup_queue(&consumer_channel).await;
-    let service = TtsAudioService::new(pool.clone()).await;
+    let service = TtsAudioService::new(pool.clone(), minio.clone()).await;
     spawn_tts_consumers(consumer_channel, service).await;
 
-    let app = create_app().with_state(AppState::new(pool).await);
+    let app = create_app().with_state(AppState::new(pool, minio).await);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))

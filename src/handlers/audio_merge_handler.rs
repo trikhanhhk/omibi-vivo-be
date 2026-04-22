@@ -71,7 +71,7 @@ pub async fn download_merge_audio(
         .ok_or_else(|| ApiError::not_found("Merge job not found"))?;
 
     let file_name = job.file_name.clone();
-    let audio_bytes = state.audio_merge_service.get_audio_bytes(job_id).await?;
+    let audio_stream = state.audio_merge_service.get_audio_stream(job_id).await?;
 
     let content_type = infer_content_type(&file_name);
     let response = Response::builder()
@@ -81,7 +81,7 @@ pub async fn download_merge_audio(
             CONTENT_DISPOSITION,
             format!("attachment; filename=\"{}\"", file_name),
         )
-        .body(Body::from(audio_bytes))
+        .body(audio_stream)
         .map_err(|e| ApiError::internal(e.to_string()))?;
 
     Ok(response)

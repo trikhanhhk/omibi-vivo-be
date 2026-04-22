@@ -1,10 +1,7 @@
-use tokio::fs::File;
-use tokio_util::io::ReaderStream;
-
 use axum::{
     body::Body,
     http::{
-        HeaderMap, StatusCode,
+        StatusCode,
         header::{ACCEPT_RANGES, CONTENT_TYPE},
     },
     response::Response,
@@ -21,22 +18,25 @@ use crate::{
         tts_job::TtsJob,
     },
     repositories::tts_audio_repository::TtsAudioRepository,
+    storage::minio_storage::MinioStorage,
 };
 
 #[derive(Clone)]
 pub struct TtsAudioService {
     repo: TtsAudioRepository,
     publisher: TtsPublisher,
+    minio: MinioStorage,
 }
 
 impl TtsAudioService {
-    pub async fn new(pool: PgPool) -> Self {
+    pub async fn new(pool: PgPool, minio: MinioStorage) -> Self {
         let channel = create_channel().await;
         setup_queue(&channel).await;
         let publisher = TtsPublisher::new(channel);
         Self {
             repo: TtsAudioRepository::new(pool),
             publisher,
+            minio,
         }
     }
 
@@ -119,26 +119,17 @@ impl TtsAudioService {
             return Err(ApiError::bad_request("Audio is not ready for streaming"));
         }
 
-        let path = audio
+        let key = audio
             .audio_url
             .as_ref()
             .ok_or(ApiError::bad_request("Audio file not ready"))?;
 
-        let full_path = format!("tts-service/{}", path);
-
-        let file = File::open(full_path)
-            .await
-            .map_err(|_| ApiError::not_found("Audio file not found"))?;
-
-        let stream = ReaderStream::new(file);
-        let body = Body::from_stream(stream);
-
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, "audio/mpeg".parse().unwrap());
-        headers.insert(ACCEPT_RANGES, "bytes".parse().unwrap());
+        let body = self.minio.download_stream(key).await?;
 
         let response = Response::builder()
             .status(StatusCode::OK)
+            .header(CONTENT_TYPE, "audio/wav")
+            .header(ACCEPT_RANGES, "bytes")
             .body(body)
             .unwrap();
 

@@ -31,6 +31,8 @@ import numpy as np
 import pika
 import soundfile as sf
 import yaml
+from minio import Minio
+from minio.error import S3Error
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,6 +89,19 @@ class TTSWorker:
         self.tts_engine = None
         self._running = False
         self._current_model_key: Optional[str] = None
+
+        # MinIO client
+        minio_endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000").removeprefix("http://").removeprefix("https://")
+        minio_access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+        minio_secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+        minio_secure = os.environ.get("MINIO_ENDPOINT", "http://localhost:9000").startswith("https")
+        self.minio_bucket = os.environ.get("MINIO_BUCKET", "ominihub")
+        self.minio_client = Minio(
+            minio_endpoint,
+            access_key=minio_access_key,
+            secret_key=minio_secret_key,
+            secure=minio_secure,
+        )
 
     # ------------------------------------------------------------------
     # TTS engine
@@ -279,12 +294,20 @@ class TTSWorker:
                 )
                 logger.info(f"   ✅ Synthesized {len(wav_bytes)} bytes in {elapsed:.2f}s")
 
-                output_dir = Path("output")
-                output_dir.mkdir(parents=True, exist_ok=True)
-                audio_path = output_dir / f"audio_{audio_id}.wav"
-                audio_path.write_bytes(wav_bytes)
+                minio_key = f"tts/audio_{audio_id}.wav"
+                wav_stream = io.BytesIO(wav_bytes)
+                if not self.minio_client.bucket_exists(self.minio_bucket):
+                    self.minio_client.make_bucket(self.minio_bucket)
+                self.minio_client.put_object(
+                    self.minio_bucket,
+                    minio_key,
+                    wav_stream,
+                    length=len(wav_bytes),
+                    content_type="audio/wav",
+                )
+                logger.info(f"   ☁️  Uploaded to MinIO: {self.minio_bucket}/{minio_key}")
 
-                self._publish_complete(ch, audio_id, str(audio_path))
+                self._publish_complete(ch, audio_id, minio_key)
 
             else:
                 # ── RPC mode ─────────────────────────────────────────────────
