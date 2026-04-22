@@ -4,3 +4,4 @@ pub mod project_basic;
 pub mod project_detail;
 pub mod project_list;
 pub mod project_response;
+pub mod upload_video_response;

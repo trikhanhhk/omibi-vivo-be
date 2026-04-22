@@ -18,7 +18,7 @@ pub struct AppState {
 impl AppState {
     pub async fn new(pool: PgPool, minio: MinioStorage) -> Self {
         Self {
-            project_service: ProjectService::new(pool.clone()),
+            project_service: ProjectService::new(pool.clone(), minio.clone()),
             tts_audio_service: TtsAudioService::new(pool.clone(), minio.clone()).await,
             audio_merge_service: AudioMergeService::new(pool, minio).await,
         }

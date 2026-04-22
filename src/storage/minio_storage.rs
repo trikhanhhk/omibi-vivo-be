@@ -80,6 +80,31 @@ impl MinioStorage {
         Ok(())
     }
 
+    /// Download with Range support — forwards the Range header to MinIO so the browser
+    /// can seek inside a video without downloading the entire file.
+    /// Returns `(body, content_length, content_range)`.  When `range` is `None` the
+    /// full object is returned with a 200 status; callers should use 206 when a range
+    /// was requested.
+    pub async fn download_range(
+        &self,
+        key: &str,
+        range: Option<&str>,
+    ) -> Result<(Body, Option<i64>, Option<String>), ApiError> {
+        let mut req = self.client.get_object().bucket(&self.bucket).key(key);
+        if let Some(r) = range {
+            req = req.range(r);
+        }
+        let output = req
+            .send()
+            .await
+            .map_err(|e| ApiError::internal_with("Failed to download from MinIO", e))?;
+
+        let content_length = output.content_length();
+        let content_range = output.content_range().map(|s| s.to_string());
+        let reader = output.body.into_async_read();
+        Ok((Body::from_stream(ReaderStream::new(reader)), content_length, content_range))
+    }
+
     /// Download as a streaming HTTP body — data flows from MinIO to the caller without
     /// buffering the entire file in RAM.
     pub async fn download_stream(&self, key: &str) -> Result<Body, ApiError> {

@@ -21,6 +21,7 @@ Requires-Dist: perth>=0.2.0
 Requires-Dist: llama-cpp-python==0.3.16
 Requires-Dist: requests
 Requires-Dist: pika>=1.3.2
+Requires-Dist: minio>=7.2.0
 Dynamic: license-file
 
 # 🦜 VieNeu-TTS
